@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>棒球投打對決</title>
+    <style>
+        body { background: #111; color: #fff; text-align: center; font-family: sans-serif; margin: 0; padding: 20px; }
+        canvas { background: #2d8a4e; border: 4px solid #fff; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: crosshair; }
+        #ui { margin-top: 10px; font-size: 18px; }
+        button { padding: 8px 16px; font-size: 16px; background: #ff5722; color: #fff; border: none; cursor: pointer; border-radius: 4px; }
+        button:hover { background: #e64a19; }
+    </style>
+</head>
+<body>
+    <h2>⚾ 投打對決棒球遊戲</h2>
+    <div id="ui">
+        比數: <span id="score">0</span> | 好球: <span id="strikes">0</span> | 出局: <span id="outs">0</span> | <span id="msg">移動滑鼠對準球心點擊揮棒！</span>
+    </div>
+    <br>
+    <canvas id="gameCanvas" width="600" height="600"></canvas>
+    <br><br>
+    <button onclick="startPitch()">投球</button>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        let score = 0, strikes = 0, outs = 0;
+        let pci = { x: 300, y: 350, r: 35 };
+        let ball = { x: 300, y: 150, z: 0.1, targetX: 300, targetY: 350, speed: 0.02, active: false, type: "直球" };
+        let resultMsg = "";
+        let msgTimer = 0;
+
+        // 滑鼠控制打擊圈 (PCI)
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            pci.x = e.clientX - rect.left;
+            pci.y = e.clientY - rect.top;
+        });
+
+        // 點擊揮棒
+        canvas.addEventListener("click", () => {
+            if (!ball.active) return;
+            ball.active = false;
+
+            // 計算擊球距離
+            let dist = Math.hypot(ball.x - pci.x, ball.y - pci.y);
+            if (dist < pci.r + 10) {
+                if (dist < 15) {
+                    score += 4;
+                    showMsg("全壘打！ 🔥");
+                } else {
+                    score += 1;
+                    showMsg("安打！ ⚾");
+                }
+            } else {
+                strikes++;
+                showMsg("揮棒落空！ ❌");
+                checkOuts();
+            }
+        });
+
+        function showMsg(txt) {
+            resultMsg = txt;
+            msgTimer = 60;
+        }
+
+        function checkOuts() {
+            if (strikes >= 3) {
+                outs++;
+                strikes = 0;
+                showMsg("三振出局！");
+                if (outs >= 3) {
+                    alert("比賽結束！總得分: " + score);
+                    score = 0; outs = 0; strikes = 0;
+                }
+            }
+        }
+
+        function startPitch() {
+            if (ball.active) return;
+            ball.z = 0.1;
+            ball.targetX = 250 + Math.random() * 100;
+            ball.targetY = 300 + Math.random() * 100;
+            ball.x = 300;
+            ball.y = 150;
+            ball.active = true;
+            resultMsg = "";
+        }
+
+        function update() {
+            if (ball.active) {
+                ball.z += ball.speed;
+                ball.x += (ball.targetX - ball.x) * ball.speed * 2;
+                ball.y += (ball.targetY - ball.y) * ball.speed * 2;
+
+                if (ball.z >= 1.0) {
+                    ball.active = false;
+                    // 進壘判斷
+                    let inZone = ball.x > 230 && ball.x < 370 && ball.y > 280 && ball.y < 420;
+                    if (inZone) {
+                        strikes++;
+                        showMsg("好球！ 🎯");
+                    } else {
+                        showMsg("壞球！ 🟢");
+                    }
+                    checkOuts();
+                }
+            }
+            if (msgTimer > 0) msgTimer--;
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 球場背景與本壘板
+            ctx.fillStyle = "#1e5f32";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 投手丘與好球帶框
+            ctx.strokeStyle = "rgba(255,255,255,0.6)";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(230, 280, 140, 140);
+
+            // 畫球 (隨 z 軸變大)
+            if (ball.active) {
+                let radius = 10 + ball.z * 40;
+                ctx.fillStyle = "#fff";
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = "#d32f2f";
+                ctx.stroke();
+            }
+
+            // 畫 PCI (打擊圈)
+            ctx.strokeStyle = "rgba(255, 235, 59, 0.8)";
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(pci.x, pci.y, pci.r, 0, Math.PI * 2);
+            ctx.stroke();
+            // 十字準星
+            ctx.beginPath();
+            ctx.moveTo(pci.x - 8, pci.y); ctx.lineTo(pci.x + 8, pci.y);
+            ctx.moveTo(pci.x, pci.y - 8); ctx.lineTo(pci.x, pci.y + 8);
+            ctx.stroke();
+
+            // 顯示文字結果
+            if (msgTimer > 0) {
+                ctx.font = "bold 32px sans-serif";
+                ctx.fillStyle = "#ffeb3b";
+                ctx.textAlign = "center";
+                ctx.fillText(resultMsg, canvas.width / 2, 100);
+            }
+
+            // 更新 HTML UI
+            document.getElementById("score").innerText = score;
+            document.getElementById("strikes").innerText = strikes;
+            document.getElementById("outs").innerText = outs;
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        loop();
+    </script>
+</body>
+</html>
