@@ -2,170 +2,670 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>棒球投打對決</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D 棒球投打對決</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background: #111; color: #fff; text-align: center; font-family: sans-serif; margin: 0; padding: 20px; }
-        canvas { background: #2d8a4e; border: 4px solid #fff; box-shadow: 0 0 20px rgba(0,0,0,0.8); cursor: crosshair; }
-        #ui { margin-top: 10px; font-size: 18px; }
-        button { padding: 8px 16px; font-size: 16px; background: #ff5722; color: #fff; border: none; cursor: pointer; border-radius: 4px; }
-        button:hover { background: #e64a19; }
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            user-select: none;
+            overflow: hidden;
+        }
+        canvas {
+            cursor: none; /* 隱藏預設鼠標，改用球棒/PCI */
+            background: linear-gradient(180deg, #38bdf8 0%, #818cf8 35%, #15803d 35%, #166534 100%);
+            touch-action: none;
+        }
+        .text-glow {
+            text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
     </style>
 </head>
-<body>
-    <h2>⚾ 投打對決棒球遊戲</h2>
-    <div id="ui">
-        比數: <span id="score">0</span> | 好球: <span id="strikes">0</span> | 出局: <span id="outs">0</span> | <span id="msg">移動滑鼠對準球心點擊揮棒！</span>
+<body class="flex flex-col items-center justify-center min-h-screen p-2">
+
+    <!-- 主遊戲容器 -->
+    <div class="relative flex flex-col items-center max-w-4xl w-full bg-slate-900 rounded-2xl shadow-2xl border border-slate-700 p-4">
+        
+        <!-- 頂部記分板與狀態 -->
+        <div class="w-full flex justify-between items-center bg-slate-800/80 backdrop-blur rounded-xl p-3 mb-3 border border-slate-700/50">
+            <!-- 比數 -->
+            <div class="flex items-center gap-4">
+                <div class="bg-slate-950/80 px-4 py-2 rounded-lg border border-slate-700 text-center">
+                    <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">得分 SCORE</div>
+                    <div id="ui-score" class="text-3xl font-black text-amber-400">0</div>
+                </div>
+                <div class="bg-slate-950/80 px-4 py-2 rounded-lg border border-slate-700 text-center">
+                    <div class="text-xs text-slate-400 font-bold uppercase tracking-wider">球數 PITCHES</div>
+                    <div id="ui-pitch-count" class="text-2xl font-bold text-sky-400">0</div>
+                </div>
+            </div>
+
+            <!-- 出局數與好壞球 -->
+            <div class="flex items-center gap-6">
+                <!-- B S O 指示燈 -->
+                <div class="flex flex-col gap-1 text-xs font-bold">
+                    <div class="flex items-center gap-2">
+                        <span class="text-emerald-400 w-3">B</span>
+                        <div class="flex gap-1">
+                            <span id="b1" class="w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-600"></span>
+                            <span id="b2" class="w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-600"></span>
+                            <span id="b3" class="w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-600"></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-amber-400 w-3">S</span>
+                        <div class="flex gap-1">
+                            <span id="s1" class="w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-600"></span>
+                            <span id="s2" class="w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-600"></span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-rose-500 w-3">O</span>
+                        <div class="flex gap-1">
+                            <span id="o1" class="w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-600"></span>
+                            <span id="o2" class="w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-600"></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 投球資訊與按鈕 -->
+                <button id="pitch-btn" class="bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black px-6 py-3 rounded-xl shadow-lg transform active:scale-95 transition-all">
+                    準備投球 (P)
+                </button>
+            </div>
+        </div>
+
+        <!-- 遊戲 Canvas -->
+        <div class="relative w-full aspect-[4/3] rounded-xl overflow-hidden border-2 border-slate-700">
+            <canvas id="gameCanvas" width="800" height="600" class="w-full h-full block"></canvas>
+            
+            <!-- 操作指示浮層 -->
+            <div id="controls-hint" class="absolute bottom-3 left-3 bg-slate-900/80 backdrop-blur px-3 py-1.5 rounded-lg border border-slate-700 text-xs text-slate-300 flex items-center gap-2">
+                <span>🖱️ <b class="text-amber-400">滑鼠</b> 移動球棒/瞄準</span>
+                <span class="text-slate-600">|</span>
+                <span>⌨️ <b class="text-amber-400">空白鍵 (Space)</b> 揮棒</span>
+            </div>
+        </div>
     </div>
-    <br>
-    <canvas id="gameCanvas" width="600" height="600"></canvas>
-    <br><br>
-    <button onclick="startPitch()">投球</button>
 
     <script>
         const canvas = document.getElementById("gameCanvas");
         const ctx = canvas.getContext("2d");
 
-        let score = 0, strikes = 0, outs = 0;
-        let pci = { x: 300, y: 350, r: 35 };
-        let ball = { x: 300, y: 150, z: 0.1, targetX: 300, targetY: 350, speed: 0.02, active: false, type: "直球" };
-        let resultMsg = "";
-        let msgTimer = 0;
+        // UI 元素引用
+        const uiScore = document.getElementById("ui-score");
+        const uiPitchCount = document.getElementById("ui-pitch-count");
+        const pitchBtn = document.getElementById("pitch-btn");
 
-        // 滑鼠控制打擊圈 (PCI)
+        // 遊戲狀態變數
+        let score = 0;
+        let balls = 0;
+        let strikes = 0;
+        let outs = 0;
+        let pitchCount = 0;
+
+        // 滑鼠/球棒 (PCI) 座標
+        let batPos = { x: 400, y: 440 };
+
+        // 投球狀態
+        let gameState = "IDLE"; // IDLE, PITCHING, IN_FLIGHT, RESULT
+        let pitchType = "直球";
+        let pitchSpeed = 145; // km/h
+        let ball = {
+            x: 400,
+            y: 190,
+            z: 0.05, // 0.05 (投手丘) ~ 1.0 (本壘板)
+            vx: 0,
+            vy: 0,
+            targetX: 400,
+            targetY: 440,
+            radius: 4,
+            trail: []
+        };
+
+        // 投手動畫狀態
+        let pitcher = {
+            x: 400,
+            y: 190,
+            frame: 0, // 0: 準備, 1: 抬腿, 2: 揮臂跨步, 3: 出球後擺臂
+            timer: 0
+        };
+
+        // 打者動畫狀態
+        let batter = {
+            x: 320,
+            y: 450,
+            swinging: false,
+            swingProgress: 0, // 0 到 1
+            swingSide: 'right' // 右打者
+        };
+
+        // 打擊結果與特效提示
+        let feedbackMessage = { text: "", subText: "", color: "#ffffff", alpha: 0, scale: 1, timer: 0 };
+        let hitParticles = [];
+
+        // 球種庫
+        const PITCH_TYPES = [
+            { name: " fastball 直球", speedMin: 142, speedMax: 153, curveX: 0, curveY: 0, color: "#f8fafc" },
+            { name: " slider 滑球", speedMin: 130, speedMax: 140, curveX: -60, curveY: 10, color: "#38bdf8" },
+            { name: " changeup 變速球", speedMin: 122, speedMax: 132, curveX: 10, curveY: 40, color: "#f59e0b" },
+            { name: " curve 曲球", speedMin: 115, speedMax: 126, curveX: -30, curveY: 70, color: "#a855f7" }
+        ];
+
+        // 滑鼠移動控制球棒瞄準
         canvas.addEventListener("mousemove", (e) => {
             const rect = canvas.getBoundingClientRect();
-            pci.x = e.clientX - rect.left;
-            pci.y = e.clientY - rect.top;
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            batPos.x = (e.clientX - rect.left) * scaleX;
+            batPos.y = (e.clientY - rect.top) * scaleY;
+
+            // 限制球棒活動範圍在好球帶附近
+            batPos.x = Math.max(280, Math.min(520, batPos.x));
+            batPos.y = Math.max(360, Math.min(520, batPos.y));
         });
 
-        // 點擊揮棒
-        canvas.addEventListener("click", () => {
-            if (!ball.active) return;
-            ball.active = false;
-
-            // 計算擊球距離
-            let dist = Math.hypot(ball.x - pci.x, ball.y - pci.y);
-            if (dist < pci.r + 10) {
-                if (dist < 15) {
-                    score += 4;
-                    showMsg("全壘打！ 🔥");
-                } else {
-                    score += 1;
-                    showMsg("安打！ ⚾");
-                }
-            } else {
-                strikes++;
-                showMsg("揮棒落空！ ❌");
-                checkOuts();
+        // 鍵盤空白鍵揮棒 & P 鍵投球
+        window.addEventListener("keydown", (e) => {
+            if (e.code === "Space") {
+                e.preventDefault();
+                triggerSwing();
+            } else if (e.code === "KeyP" && gameState === "IDLE") {
+                startPitchSequence();
             }
         });
 
-        function showMsg(txt) {
-            resultMsg = txt;
-            msgTimer = 60;
+        pitchBtn.addEventListener("click", () => {
+            if (gameState === "IDLE") {
+                startPitchSequence();
+            }
+        });
+
+        // 開始投球流程 (投手動畫啟動)
+        function startPitchSequence() {
+            if (gameState !== "IDLE") return;
+            gameState = "PITCHING";
+            pitcher.frame = 0;
+            pitcher.timer = 0;
+            pitchCount++;
+
+            // 隨機選擇球種與落點
+            const typeObj = PITCH_TYPES[Math.floor(Math.random() * PITCH_TYPES.length)];
+            pitchType = typeObj.name;
+            pitchSpeed = Math.floor(Math.random() * (typeObj.speedMax - typeObj.speedMin + 1)) + typeObj.speedMin;
+
+            // 設定好球帶/壞球帶目標點
+            // 好球帶約在 x: 330~470, y: 390~490
+            const inZone = Math.random() > 0.35;
+            if (inZone) {
+                ball.targetX = 350 + Math.random() * 100;
+                ball.targetY = 400 + Math.random() * 80;
+            } else {
+                ball.targetX = 300 + Math.random() * 200;
+                ball.targetY = 360 + Math.random() * 140;
+            }
+
+            ball.typeObj = typeObj;
+            ball.x = pitcher.x;
+            ball.y = pitcher.y - 20;
+            ball.z = 0.05;
+            ball.trail = [];
         }
 
-        function checkOuts() {
+        // 觸發揮棒
+        function triggerSwing() {
+            if (batter.swinging) return;
+            batter.swinging = true;
+            batter.swingProgress = 0;
+
+            // 若球在飛行中，進行打擊判定
+            if (gameState === "IN_FLIGHT") {
+                evaluateHit();
+            }
+        }
+
+        // 打擊時機與接觸點判定
+        function evaluateHit() {
+            // 球接近本壘板時 z 軸約為 0.85 ~ 1.05
+            const zDiff = Math.abs(ball.z - 0.95);
+            // PCI 與球心距離
+            const dist = Math.hypot(ball.x - batPos.x, ball.y - batPos.y);
+
+            let timing = "";
+            if (ball.z < 0.88) timing = "過早 TOO EARLY";
+            else if (ball.z > 1.02) timing = "過晚 TOO LATE";
+            else timing = "完美 PERFECT";
+
+            gameState = "RESULT";
+
+            if (dist < 42 && zDiff < 0.18) {
+                // 接觸良好
+                if (timing === "完美 PERFECT" && dist < 22) {
+                    // 全壘打
+                    score += 1;
+                    showFeedback("HOME RUN! ⚾🔥", "揮棒時間完美！陽春全壘打", "#f59e0b");
+                    createParticles(ball.x, ball.y, 40, "#f59e0b");
+                    resetCountAfterHit();
+                } else if (dist < 32 && zDiff < 0.15) {
+                    // 安打
+                    score += 1;
+                    showFeedback("BASE HIT! 💥", "擊出清脆安打！得分", "#10b981");
+                    createParticles(ball.x, ball.y, 25, "#10b981");
+                    resetCountAfterHit();
+                } else {
+                    // 界外球或擦棒
+                    if (strikes < 2) strikes++;
+                    showFeedback("FOUL BALL ⚠️", `揮棒時機: ${timing}`, "#ef4444");
+                }
+            } else {
+                // 揮空
+                strikes++;
+                showFeedback("SWING & MISS ❌", `揮棒落空！ ${timing}`, "#f43f5e");
+                checkOutsAndBalls();
+            }
+
+            updateUI();
+        }
+
+        function checkOutsAndBalls() {
             if (strikes >= 3) {
                 outs++;
                 strikes = 0;
-                showMsg("三振出局！");
-                if (outs >= 3) {
-                    alert("比賽結束！總得分: " + score);
-                    score = 0; outs = 0; strikes = 0;
-                }
+                balls = 0;
+                showFeedback("STRIKE OUT! ❌", "三振出局！", "#e11d48");
+            }
+            if (balls >= 4) {
+                score += 1;
+                balls = 0;
+                strikes = 0;
+                showFeedback("BALL 4 / WALK 🟢", "獲得保送進壘得分！", "#10b981");
+            }
+            if (outs >= 3) {
+                setTimeout(() => {
+                    alert(`比賽結束！總共擊出 ${score} 分。按確定重新開始。`);
+                    score = 0; outs = 0; strikes = 0; balls = 0; pitchCount = 0;
+                    updateUI();
+                }, 500);
             }
         }
 
-        function startPitch() {
-            if (ball.active) return;
-            ball.z = 0.1;
-            ball.targetX = 250 + Math.random() * 100;
-            ball.targetY = 300 + Math.random() * 100;
-            ball.x = 300;
-            ball.y = 150;
-            ball.active = true;
-            resultMsg = "";
+        function resetCountAfterHit() {
+            balls = 0;
+            strikes = 0;
         }
 
+        function showFeedback(text, subText, color) {
+            feedbackMessage = { text, subText, color, alpha: 1.0, scale: 1.4, timer: 90 };
+        }
+
+        function createParticles(x, y, count, color) {
+            for (let i = 0; i < count; i++) {
+                hitParticles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 12,
+                    vy: (Math.random() - 0.5) * 12 - 3,
+                    radius: Math.random() * 4 + 2,
+                    color: color,
+                    alpha: 1.0,
+                    life: 30 + Math.random() * 20
+                });
+            }
+        }
+
+        // ------------------ 物理與狀態更新 ------------------
         function update() {
-            if (ball.active) {
-                ball.z += ball.speed;
-                ball.x += (ball.targetX - ball.x) * ball.speed * 2;
-                ball.y += (ball.targetY - ball.y) * ball.speed * 2;
-
-                if (ball.z >= 1.0) {
-                    ball.active = false;
-                    // 進壘判斷
-                    let inZone = ball.x > 230 && ball.x < 370 && ball.y > 280 && ball.y < 420;
-                    if (inZone) {
-                        strikes++;
-                        showMsg("好球！ 🎯");
-                    } else {
-                        showMsg("壞球！ 🟢");
-                    }
-                    checkOuts();
+            // 投手投球動作動畫進程
+            if (gameState === "PITCHING") {
+                pitcher.timer++;
+                if (pitcher.timer < 15) pitcher.frame = 1;      // 抬腿
+                else if (pitcher.timer < 30) pitcher.frame = 2; // 揮臂跨步
+                else {
+                    pitcher.frame = 3; // 放球
+                    gameState = "IN_FLIGHT";
                 }
             }
-            if (msgTimer > 0) msgTimer--;
+
+            // 球在飛行中
+            if (gameState === "IN_FLIGHT") {
+                // 根據球速計算飛行進度 (0.05 到 1.05)
+                const speedFactor = (pitchSpeed / 140) * 0.024;
+                ball.z += speedFactor;
+
+                // 球道軌跡計算 (加入變化球弧線)
+                const curveProgress = Math.sin(ball.z * Math.PI);
+                const currentCurveX = ball.typeObj.curveX * curveProgress;
+                const currentCurveY = ball.typeObj.curveY * curveProgress;
+
+                ball.x = pitcher.x + (ball.targetX - pitcher.x) * ball.z + currentCurveX;
+                ball.y = (pitcher.y - 20) + (ball.targetY - (pitcher.y - 20)) * ball.z + currentCurveY;
+
+                // 記錄軌跡
+                ball.trail.push({ x: ball.x, y: ball.y, z: ball.z });
+                if (ball.trail.length > 8) ball.trail.shift();
+
+                // 未揮棒進入進壘區
+                if (ball.z >= 1.05) {
+                    gameState = "RESULT";
+                    // 判斷好壞球
+                    const inStrikeZone = ball.targetX >= 330 && ball.targetX <= 470 && ball.targetY >= 380 && ball.targetY <= 500;
+                    if (inStrikeZone) {
+                        strikes++;
+                        showFeedback("STRIKE 🎯", "好球進壘！", "#f59e0b");
+                    } else {
+                        balls++;
+                        showFeedback("BALL 🟢", "壞球選得好！", "#10b981");
+                    }
+                    checkOutsAndBalls();
+                    updateUI();
+                }
+            }
+
+            // 打者揮棒動畫更新
+            if (batter.swinging) {
+                batter.swingProgress += 0.12;
+                if (batter.swingProgress >= 1) {
+                    batter.swinging = false;
+                    batter.swingProgress = 0;
+                }
+            }
+
+            // 粒子更新
+            for (let i = hitParticles.length - 1; i >= 0; i--) {
+                const p = hitParticles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.alpha -= 1 / p.life;
+                if (p.alpha <= 0) hitParticles.splice(i, 1);
+            }
+
+            // 提示訊息淡出
+            if (feedbackMessage.timer > 0) {
+                feedbackMessage.timer--;
+                if (feedbackMessage.timer < 20) {
+                    feedbackMessage.alpha = feedbackMessage.timer / 20;
+                }
+            } else if (gameState === "RESULT") {
+                gameState = "IDLE";
+                pitcher.frame = 0;
+            }
         }
 
+        // ------------------ 繪製繪圖邏輯 ------------------
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 球場背景與本壘板
-            ctx.fillStyle = "#1e5f32";
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // 投手丘與好球帶框
-            ctx.strokeStyle = "rgba(255,255,255,0.6)";
-            ctx.lineWidth = 3;
-            ctx.strokeRect(230, 280, 140, 140);
+            // 1. 繪製球場草地與泥土 (畫布背景由 CSS 定義)
+            // 繪製內野泥土區 (梯形/鑽石感)
+            ctx.fillStyle = "#b45309";
+            ctx.beginPath();
+            ctx.moveTo(240, 600);
+            ctx.lineTo(350, 220);
+            ctx.lineTo(450, 220);
+            ctx.lineTo(560, 600);
+            ctx.fill();
 
-            // 畫球 (隨 z 軸變大)
-            if (ball.active) {
-                let radius = 10 + ball.z * 40;
-                ctx.fillStyle = "#fff";
+            // 投手丘
+            ctx.fillStyle = "#d97706";
+            ctx.beginPath();
+            ctx.ellipse(400, 210, 45, 18, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(385, 205, 30, 4); // 投手板
+
+            // 本壘板
+            ctx.fillStyle = "#ffffff";
+            ctx.beginPath();
+            ctx.moveTo(400, 520);
+            ctx.lineTo(430, 490);
+            ctx.lineTo(430, 470);
+            ctx.lineTo(370, 470);
+            ctx.lineTo(370, 490);
+            ctx.closePath();
+            ctx.fill();
+
+            // 繪製九宮格好球帶 ( Strike Zone )
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(330, 380, 140, 120);
+            // 虛線九宮格
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(376, 380); ctx.lineTo(376, 500);
+            ctx.moveTo(423, 380); ctx.lineTo(423, 500);
+            ctx.moveTo(330, 420); ctx.lineTo(470, 420);
+            ctx.moveTo(330, 460); ctx.lineTo(470, 460);
+            ctx.stroke();
+            ctx.setLineDash([]); // 復原實線
+
+            // 2. 繪製投手動畫 (Pitcher)
+            drawPitcher();
+
+            // 3. 繪製球體與飛行殘影
+            if (gameState === "IN_FLIGHT" || gameState === "RESULT") {
+                // 殘影
+                ball.trail.forEach((pt, idx) => {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${idx * 0.1})`;
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, (5 + pt.z * 25) * 0.7, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+
+                // 球體本體
+                const currentRadius = 5 + ball.z * 28; // 近大遠小
+                ctx.fillStyle = "#ffffff";
                 ctx.beginPath();
-                ctx.arc(ball.x, ball.y, radius, 0, Math.PI * 2);
+                ctx.arc(ball.x, ball.y, currentRadius, 0, Math.PI * 2);
                 ctx.fill();
-                ctx.strokeStyle = "#d32f2f";
+                ctx.strokeStyle = "#dc2626";
+                ctx.lineWidth = Math.max(1, currentRadius * 0.15);
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, currentRadius * 0.7, 0.2, Math.PI - 0.2);
+                ctx.stroke();
+
+                // 球種與球速標籤
+                if (gameState === "IN_FLIGHT") {
+                    ctx.fillStyle = ball.typeObj.color;
+                    ctx.font = "bold 14px sans-serif";
+                    ctx.fillText(`${ball.typeObj.name} ${pitchSpeed} km/h`, ball.x + currentRadius + 8, ball.y + 4);
+                }
+            }
+
+            // 4. 繪製打者動畫 (Batter)
+            drawBatter();
+
+            // 5. 繪製鼠標/球棒瞄準 (PCI Bat Cursor)
+            drawBatCursor();
+
+            // 6. 繪製擊球粒子
+            hitParticles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.alpha;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            ctx.globalAlpha = 1.0;
+
+            // 7. 繪製打擊評語與提示文字
+            if (feedbackMessage.alpha > 0) {
+                ctx.save();
+                ctx.globalAlpha = feedbackMessage.alpha;
+                ctx.textAlign = "center";
+                ctx.fillStyle = feedbackMessage.color;
+                ctx.font = "black 36px sans-serif";
+                ctx.fillText(feedbackMessage.text, 400, 300);
+                
+                ctx.fillStyle = "#f8fafc";
+                ctx.font = "bold 18px sans-serif";
+                ctx.fillText(feedbackMessage.subText, 400, 335);
+                ctx.restore();
+            }
+        }
+
+        // 繪製投手各動作幀
+        function drawPitcher() {
+            ctx.save();
+            ctx.translate(pitcher.x, pitcher.y);
+
+            ctx.fillStyle = "#1e293b"; // 身體/球衣
+            ctx.strokeStyle = "#f8fafc";
+            ctx.lineWidth = 3;
+
+            if (pitcher.frame === 0) { // 準備動作
+                // 頭部
+                ctx.beginPath(); ctx.arc(0, -35, 8, 0, Math.PI * 2); ctx.fill();
+                // 軀幹
+                ctx.fillRect(-6, -27, 12, 22);
+                // 雙腿
+                ctx.strokeRect(-6, -5, 5, 20); ctx.strokeRect(1, -5, 5, 20);
+            } else if (pitcher.frame === 1) { // 抬腿
+                ctx.beginPath(); ctx.arc(-2, -37, 8, 0, Math.PI * 2); ctx.fill();
+                ctx.fillRect(-6, -29, 12, 22);
+                // 軸承腿與抬高之左腿
+                ctx.strokeRect(1, -7, 5, 22);
+                ctx.beginPath(); ctx.moveTo(-6, -7); ctx.lineTo(-18, -12); ctx.lineTo(-12, 5); ctx.stroke();
+            } else if (pitcher.frame === 2) { // 揮臂跨步
+                ctx.beginPath(); ctx.arc(8, -33, 8, 0, Math.PI * 2); ctx.fill();
+                ctx.fillRect(0, -25, 14, 20);
+                // 跨步大腿
+                ctx.beginPath(); ctx.moveTo(0, -5); ctx.lineTo(-18, 15); ctx.moveTo(14, -5); ctx.lineTo(25, 15); ctx.stroke();
+                // 投球手高舉
+                ctx.beginPath(); ctx.moveTo(2, -20); ctx.lineTo(-15, -40); ctx.stroke();
+            } else if (pitcher.frame === 3) { // 放球後擺臂
+                ctx.beginPath(); ctx.arc(15, -28, 8, 0, Math.PI * 2); ctx.fill();
+                ctx.fillRect(5, -20, 14, 18);
+                ctx.beginPath(); ctx.moveTo(5, -2); ctx.lineTo(-10, 18); ctx.moveTo(18, -2); ctx.lineTo(30, 18); ctx.stroke();
+                // 壓低手臂
+                ctx.beginPath(); ctx.moveTo(15, -15); ctx.lineTo(32, -2); ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+        // 繪製打者與揮棒軌跡
+        function drawBatter() {
+            ctx.save();
+            // 右打者站在本壘板左側
+            ctx.translate(batter.x, batter.y);
+
+            ctx.fillStyle = "#dc2626"; // 紅色頭盔/球衣
+            ctx.strokeStyle = "#f8fafc";
+            ctx.lineWidth = 4;
+
+            if (!batter.swinging) {
+                // 準備站姿
+                // 頭盔
+                ctx.beginPath(); ctx.arc(0, -50, 10, 0, Math.PI * 2); ctx.fill();
+                // 軀幹
+                ctx.fillRect(-8, -40, 16, 30);
+                // 雙腿
+                ctx.beginPath(); ctx.moveTo(-6, -10); ctx.lineTo(-12, 25); ctx.moveTo(6, -10); ctx.lineTo(12, 25); ctx.stroke();
+                // 手握球棒豎立於後方
+                ctx.strokeStyle = "#d97706";
+                ctx.lineWidth = 6;
+                ctx.beginPath();
+                ctx.moveTo(8, -35); ctx.lineTo(25, -65);
+                ctx.stroke();
+            } else {
+                // 揮棒動態過程 (根據 swingProgress 插值計算動態弧線)
+                const angle = -Math.PI / 3 + batter.swingProgress * Math.PI * 1.2;
+
+                // 身體轉動姿態
+                ctx.beginPath(); ctx.arc(10, -48, 10, 0, Math.PI * 2); ctx.fill();
+                ctx.fillRect(-4, -38, 18, 28);
+                ctx.beginPath(); ctx.moveTo(-4, -10); ctx.lineTo(-16, 25); ctx.moveTo(10, -10); ctx.lineTo(18, 25); ctx.stroke();
+
+                // 球棒動態弧跡
+                ctx.save();
+                ctx.translate(10, -30);
+                ctx.rotate(angle);
+
+                // 繪製木棒
+                ctx.fillStyle = "#d97706";
+                ctx.fillRect(0, -5, 75, 9); // 棒身
+                ctx.fillStyle = "#78350f";
+                ctx.fillRect(-10, -3, 15, 5); // 握把
+
+                ctx.restore();
+
+                // 揮棒風壓軌跡
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(10, -30, 65, -Math.PI/3, angle);
                 ctx.stroke();
             }
 
-            // 畫 PCI (打擊圈)
-            ctx.strokeStyle = "rgba(255, 235, 59, 0.8)";
+            ctx.restore();
+        }
+
+        // 繪製滑鼠球棒/PCI 準星
+        function drawBatCursor() {
+            ctx.save();
+            ctx.translate(batPos.x, batPos.y);
+
+            // PCI 橢圓打擊區域
+            ctx.strokeStyle = "rgba(251, 191, 36, 0.8)";
+            ctx.fillStyle = "rgba(251, 191, 36, 0.15)";
             ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.arc(pci.x, pci.y, pci.r, 0, Math.PI * 2);
+            ctx.ellipse(0, 0, 32, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
             ctx.stroke();
-            // 十字準星
+
+            // 球棒圖案 (斜放跟隨鼠標)
+            ctx.rotate(-Math.PI / 4);
+            ctx.fillStyle = "#b45309";
+            ctx.fillRect(-6, 15, 12, 50); // 棒身
+            ctx.fillStyle = "#f59e0b";
+            ctx.fillRect(-7, 15, 14, 8);  // 甜點區標記
+            ctx.fillStyle = "#78350f";
+            ctx.fillRect(-4, 65, 8, 20);  // 握把
+
+            // 中心點準星
+            ctx.fillStyle = "#ef4444";
             ctx.beginPath();
-            ctx.moveTo(pci.x - 8, pci.y); ctx.lineTo(pci.x + 8, pci.y);
-            ctx.moveTo(pci.x, pci.y - 8); ctx.lineTo(pci.x, pci.y + 8);
-            ctx.stroke();
+            ctx.arc(0, 0, 3, 0, Math.PI * 2);
+            ctx.fill();
 
-            // 顯示文字結果
-            if (msgTimer > 0) {
-                ctx.font = "bold 32px sans-serif";
-                ctx.fillStyle = "#ffeb3b";
-                ctx.textAlign = "center";
-                ctx.fillText(resultMsg, canvas.width / 2, 100);
-            }
-
-            // 更新 HTML UI
-            document.getElementById("score").innerText = score;
-            document.getElementById("strikes").innerText = strikes;
-            document.getElementById("outs").innerText = outs;
+            ctx.restore();
         }
 
-        function loop() {
+        // 更新 UI 數據顯示
+        function updateUI() {
+            uiScore.innerText = score;
+            uiPitchCount.innerText = pitchCount;
+
+            // 好壞球燈號
+            updateDots('b', balls, 'bg-emerald-500');
+            updateDots('s', strikes, 'bg-amber-400');
+            updateDots('o', outs, 'bg-rose-500');
+        }
+
+        function updateDots(prefix, count, activeClass) {
+            for (let i = 1; i <= 3; i++) {
+                const dot = document.getElementById(prefix + i);
+                if (dot) {
+                    if (i <= count) {
+                        dot.className = `w-3.5 h-3.5 rounded-full ${activeClass} shadow-md`;
+                    } else {
+                        dot.className = "w-3.5 h-3.5 rounded-full bg-slate-700 border border-slate-600";
+                    }
+                }
+            }
+        }
+
+        // 遊戲主循環 60 FPS
+        function gameLoop() {
             update();
             draw();
-            requestAnimationFrame(loop);
+            requestAnimationFrame(gameLoop);
         }
 
-        loop();
+        // 啟動遊戲
+        gameLoop();
     </script>
 </body>
 </html>
